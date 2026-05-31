@@ -3,8 +3,7 @@ import base64
 import logging
 from typing import Optional
 
-import mysql.connector
-from mysql.connector import Error
+import sqlite3
 from werkzeug.security import generate_password_hash, check_password_hash
 from Crypto.Cipher import AES
 
@@ -55,6 +54,37 @@ except Exception:
     SECRET_KEY = (b + b"\0" * 32)[:32]
 
 
+def init_db():
+    conn = sqlite3.connect("chat.db")
+    cur = conn.cursor()
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS users(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        mobile TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        profile_pic TEXT
+    )
+    """)
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS messages(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        sender_id INTEGER,
+        receiver_id INTEGER,
+        encrypted_message TEXT,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+    """)
+
+    conn.commit()
+    conn.close()
+
+
+init_db()
+
+
 # ---------- AES-GCM helpers ----------
 def encrypt_message(message: str) -> str:
     """Encrypt a UTF-8 string and return a base64 payload: nonce(16) + tag(16) + ciphertext"""
@@ -96,8 +126,10 @@ def make_profile_url(stored_value: Optional[str]) -> Optional[str]:
 # ---------- DB connection ----------
 def get_db_connection():
     try:
-        return mysql.connector.connect(**DB_CONFIG)
-    except Error:
+        conn = sqlite3.connect("chat.db")
+        conn.row_factory = sqlite3.Row
+        return conn
+    except Exception:
         logger.exception("DB connect error")
         return None
 
@@ -108,14 +140,14 @@ def create_user(name, mobile, password, profile_pic=None):
     if not conn:
         return {"status": "error", "message": "DB connection failed"}
     try:
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT id FROM users WHERE mobile=%s", (mobile,))
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM users WHERE mobile=?", (mobile,))
         if cursor.fetchone():
             return {"status": "error", "message": "Mobile number already registered"}
         hashed = generate_password_hash(password)
         pic_filename = os.path.basename(profile_pic) if profile_pic else None
         cursor.execute(
-            "INSERT INTO users (name, mobile, password_hash, profile_pic) VALUES (%s,%s,%s,%s)",
+            "INSERT INTO users (name, mobile, password_hash, profile_pic) VALUES (?,?,?,?)",
             (name, mobile, hashed, pic_filename),
         )
         conn.commit()
@@ -139,25 +171,35 @@ def verify_user(mobile, password):
     conn = get_db_connection()
     if not conn:
         return {"status": "error", "message": "DB connection failed"}
+
     try:
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT * FROM users WHERE mobile=%s", (mobile,))
-        user = cursor.fetchone()
-        if not user or not check_password_hash(
-            user["password_hash"], password
-        ):  # pyright: ignore[reportCallIssue]
+        cursor = conn.cursor()
+
+        cursor.execute(
+            "SELECT id, name, password_hash, profile_pic FROM users WHERE mobile=?",
+            (mobile,),
+        )
+
+        row = cursor.fetchone()
+
+        if not row:
             return {"status": "error", "message": "Invalid credentials"}
-        pic_val = user.get("profile_pic") or user.get("image_url")
+
+        if not check_password_hash(row["password_hash"], password):
+            return {"status": "error", "message": "Invalid credentials"}
+
         return {
             "status": "success",
-            "id": user["id"],  # pyright: ignore[reportCallIssue]
-            "name": user["name"],
-            "profile_pic": make_profile_url(pic_val)
+            "id": row["id"],
+            "name": row["name"],
+            "profile_pic": make_profile_url(row["profile_pic"])
             or "static/profile_pic/default.png",
         }
-    except Error:
+
+    except Exception:
         logger.exception("verify_user DB error")
         return {"status": "error", "message": "DB error during verify_user"}
+
     finally:
         try:
             conn.close()
@@ -170,18 +212,25 @@ def store_message(sender_id, receiver_id, message):
     conn = get_db_connection()
     if not conn:
         return {"status": "error", "message": "DB connection failed"}
+
     try:
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
+
         enc = encrypt_message(message)
+
         cursor.execute(
-            "INSERT INTO messages (sender_id, receiver_id, encrypted_message) VALUES (%s,%s,%s)",
+            "INSERT INTO messages (sender_id, receiver_id, encrypted_message) VALUES (?, ?, ?)",
             (sender_id, receiver_id, enc),
         )
+
         conn.commit()
+
         return {"status": "success", "message": "Message stored"}
-    except Error:
+
+    except Exception:
         logger.exception("store_message DB error")
         return {"status": "error", "message": "DB error during store_message"}
+
     finally:
         try:
             conn.close()
@@ -191,21 +240,29 @@ def store_message(sender_id, receiver_id, message):
 
 def fetch_messages(sender_id, receiver_id):
     conn = get_db_connection()
+
     if not conn:
         return {"status": "error", "message": "DB connection failed"}
+
     try:
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
+
         cursor.execute(
             """
-            SELECT id, sender_id, receiver_id, encrypted_message, timestamp
+            SELECT id, sender_id, receiver_id,
+                   encrypted_message, timestamp
             FROM messages
-            WHERE (sender_id=%s AND receiver_id=%s) OR (sender_id=%s AND receiver_id=%s)
+            WHERE (sender_id=? AND receiver_id=?)
+               OR (sender_id=? AND receiver_id=?)
             ORDER BY timestamp ASC
             """,
             (sender_id, receiver_id, receiver_id, sender_id),
         )
-        rows = cursor.fetchall() or []
+
+        rows = cursor.fetchall()
+
         out = []
+
         for r in rows:
             out.append(
                 {
@@ -217,10 +274,13 @@ def fetch_messages(sender_id, receiver_id):
                     "timestamp": str(r["timestamp"]),
                 }
             )
+
         return {"status": "success", "messages": out}
-    except Error:
+
+    except Exception:
         logger.exception("fetch_messages DB error")
         return {"status": "error", "message": "DB error during fetch_messages"}
+
     finally:
         try:
             conn.close()
@@ -230,51 +290,97 @@ def fetch_messages(sender_id, receiver_id):
 
 def fetch_users(current_user_id):
     conn = get_db_connection()
+
     if not conn:
         return {"status": "error", "message": "DB connection failed"}
+
     try:
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
+
         cursor.execute(
-            "SELECT id, name, COALESCE(profile_pic, '') AS profile_pic FROM users WHERE id != %s",
+            """
+            SELECT id, name,
+                   COALESCE(profile_pic, '') AS profile_pic
+            FROM users
+            WHERE id != ?
+            """,
             (current_user_id,),
         )
-        users = cursor.fetchall() or []
-        for user in users:
+
+        rows = cursor.fetchall()
+
+        users = []
+
+        for row in rows:
+
+            user = {
+                "id": row["id"],
+                "name": row["name"],
+                "profile_pic": row["profile_pic"],
+            }
+
             try:
                 cursor.execute(
                     """
-                    SELECT encrypted_message, timestamp FROM messages
-                    WHERE (sender_id=%s AND receiver_id=%s) OR (sender_id=%s AND receiver_id=%s)
-                    ORDER BY timestamp DESC LIMIT 1
+                    SELECT encrypted_message, timestamp
+                    FROM messages
+                    WHERE (sender_id=? AND receiver_id=?)
+                       OR (sender_id=? AND receiver_id=?)
+                    ORDER BY timestamp DESC
+                    LIMIT 1
                     """,
-                    (current_user_id, user["id"], user["id"], current_user_id),
+                    (
+                        current_user_id,
+                        user["id"],
+                        user["id"],
+                        current_user_id,
+                    ),
                 )
-                row = cursor.fetchone()
-                user["last_message"] = (
-                    decrypt_message(row["encrypted_message"])
-                    if row and row.get("encrypted_message")
-                    else ""
-                )
-                user["last_time"] = row["timestamp"] if row else None
+
+                msg = cursor.fetchone()
+
+                if msg:
+                    user["last_message"] = decrypt_message(msg["encrypted_message"])
+                    user["last_time"] = msg["timestamp"]
+                else:
+                    user["last_message"] = ""
+                    user["last_time"] = None
+
             except Exception:
                 logger.exception(
-                    "Error fetching last_message for user %s", user.get("id")
+                    "Error fetching last message for user %s",
+                    user["id"],
                 )
                 user["last_message"] = ""
                 user["last_time"] = None
 
-            user["profile_pic"] = make_profile_url(user.get("profile_pic"))
+            user["profile_pic"] = (
+                make_profile_url(user["profile_pic"])
+                or "static/profile_pic/default.png"
+            )
 
-        # ✅ sort by actual timestamp (datetime), not string
+            users.append(user)
+
         users.sort(
-            key=lambda x: (x["last_time"] is not None, x["last_time"]),
+            key=lambda x: (
+                x["last_time"] is not None,
+                x["last_time"],
+            ),
             reverse=True,
         )
 
-        return {"status": "success", "users": users}
+        return {
+            "status": "success",
+            "users": users,
+        }
+
     except Exception:
         logger.exception("fetch_users failed")
-        return {"status": "error", "message": "DB query failed in fetch_users"}
+        return {
+            "status": "error",
+            "message": "DB query failed in fetch_users",
+        }
+
     finally:
         try:
             conn.close()
@@ -284,22 +390,32 @@ def fetch_users(current_user_id):
 
 def fetch_all_messages_monitor():
     conn = get_db_connection()
+
     if not conn:
         return {"status": "error", "message": "DB connection failed"}
+
     try:
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute(
-            """
-            SELECT m.id, m.sender_id, m.receiver_id, m.encrypted_message, m.timestamp,
-                   s.name AS sender_name, r.name AS receiver_name
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT
+                m.id,
+                m.sender_id,
+                m.receiver_id,
+                m.encrypted_message,
+                m.timestamp,
+                s.name AS sender_name,
+                r.name AS receiver_name
             FROM messages m
             JOIN users s ON s.id = m.sender_id
             JOIN users r ON r.id = m.receiver_id
             ORDER BY m.timestamp DESC
-            """
-        )
-        rows = cursor.fetchall() or []
+        """)
+
+        rows = cursor.fetchall()
+
         out = []
+
         for r in rows:
             out.append(
                 {
@@ -313,10 +429,19 @@ def fetch_all_messages_monitor():
                     "timestamp": str(r["timestamp"]),
                 }
             )
-        return {"status": "success", "messages": out}
+
+        return {
+            "status": "success",
+            "messages": out,
+        }
+
     except Exception:
         logger.exception("fetch_all_messages_monitor failed")
-        return {"status": "error", "message": "DB query failed in monitor"}
+        return {
+            "status": "error",
+            "message": "DB query failed in monitor",
+        }
+
     finally:
         try:
             conn.close()
