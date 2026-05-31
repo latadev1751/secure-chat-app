@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Secure AES Chat — Theme Toggle</title>
+<style>
+/* ---------------- BASE ---------------- */
+html,body{height:100%;}
+body {
+  margin:0; font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background:var(--bg); color:var(--fg);
+  transition: background 0.35s ease, color 0.35s ease;
+  -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+}
+
+/* ---------------- ROOT VARIABLES ---------------- */
+:root{
+  --hdr: #4a90e2;
+  --hdr2: #357ABD;
+  --hdr-contrast: #fff;
+  --fg: #111;
+  --panel-bg: rgba(255,255,255,0.06);
+  --panel-blur: 10px;
+  --panel-border: rgba(0,0,0,0.06);
+  --msg-in: rgba(241,243,245,0.9);
+  --msg-out: rgba(72,239,128,0.3);
+  --shadow: 0 8px 32px 0 rgba(31,38,135,0.08);
+  --btn-bg: #fff;
+  --btn-fg: #357ABD;
+  --btn-bg-hover: rgba(255,255,255,0.9);
+  --muted: rgba(0,0,0,0.45);
+}
+
+/* ---------------- THEMES (polished) ---------------- */
+/* LIGHT - Soft Blue (theme1) */
+body.theme1{
+  --bg: linear-gradient(180deg,#f5f9ff,#edf6ff);
+  --panel-bg: rgba(255,255,255,0.9);
+  --hdr: #4a90e2; --hdr2:#357ABD;
+  --hdr-contrast: #fff;
+  --fg: #0f1724;
+  --panel-border: rgba(53,122,189,0.12);
+  --btn-bg: #fff; --btn-fg:#357ABD;
+  --msg-in: rgba(241,243,245,0.95);
+  --msg-out: rgba(199,247,207,0.9);
+  --muted: rgba(15,23,36,0.45);
+}
+/* GREEN - Light green (theme2) */
+body.theme2{
+  --bg: linear-gradient(180deg,#f6fff5,#e6ffe6);
+  --panel-bg: rgba(255,255,255,0.92);
+  --hdr: #28a745; --hdr2: #218838;
+  --hdr-contrast: #fff;
+  --fg: #0b2b0b;
+  --btn-bg: #fff; --btn-fg:#218838;
+  --msg-in: rgba(230,255,230,0.95);
+  --msg-out: rgba(199,247,207,0.9);
+  --muted: rgba(11,43,11,0.45);
+}
+/* DARK - Polished dark mode (theme3) — recommended */
+body.theme3{
+  --bg: #111;
+  --fg: #eee; /* readable text */
+  --panel-bg: rgba(20,20,20,0.9);
+  --panel-border: rgba(255,255,255,0.1);
+  --msg-in: rgba(50,50,50,0.95);
+  --msg-out: rgba(72,239,128,0.3);
+  --btn-bg: #357ABD;
+  --btn-fg: #fff; /* Send button visible */
+  --muted: rgba(200,200,200,0.6);
+}
+/* ACCENT / PURPLE (theme4) */
+body.theme4{
+  --bg: linear-gradient(180deg,#fbf5ff,#f3e6ff);
+  --panel-bg: rgba(255,255,255,0.92);
+  --hdr: #a64ca6; --hdr2:#9333ea;
+  --hdr-contrast:#fff;
+  --fg: #0b0424;
+  --btn-bg:#fff; --btn-fg:#9333ea;
+  --msg-in: rgba(243,230,255,0.95);
+  --msg-out: rgba(199,247,207,0.9);
+  --muted: rgba(11,4,36,0.45);
+}
+
+/* ---------------- HEADER ---------------- */
+header.app{
+  display:flex; flex-direction:column; align-items:center; padding:14px 20px;
+  background:linear-gradient(135deg,var(--hdr),var(--hdr2));
+  color:var(--hdr-contrast); box-shadow:var(--shadow); border-radius:0 0 14px 14px;
+}
+header.app h1{ margin:0; font-size:30px; font-weight:700; text-align:center; }
+header.app .app-actions{ margin-top:12px; display:flex; gap:10px; justify-content:center; align-items:center; }
+
+header.app button, header.app select{ border:none; border-radius:22px; padding:8px 14px; cursor:pointer; font-weight:600; transition:0.18s; background:var(--btn-bg); color:var(--btn-fg); }
+header.app button[type="button"]:hover, header.app select:hover{ background:var(--btn-bg-hover); }
+
+/* small toggle */
+.theme-toggle { display:inline-flex; align-items:center; gap:8px; }
+.theme-toggle button{ padding:6px 10px; border-radius:18px; }
+
+
+/* ---------------- LAYOUT ---------------- */
+.container { display:flex; height:calc(100vh - 130px); padding:8px; box-sizing:border-box; gap:10px; }
+.panel { flex:1; display:flex; flex-direction:column; background:var(--panel-bg); backdrop-filter:blur(var(--panel-blur)); border:1px solid var(--panel-border); border-radius:12px; box-shadow:var(--shadow); overflow:hidden; }
+.middle { flex:1.7; display:flex; flex-direction:column; background:var(--panel-bg); backdrop-filter:blur(var(--panel-blur)); border:1px solid var(--panel-border); border-radius:12px; box-shadow:var(--shadow); overflow:hidden; border-left:2px solid rgba(255,255,255,0.08); border-right:2px solid rgba(255,255,255,0.08); }
+
+.phead {
+  background: rgba(162, 89, 89, 0.04);
+  padding: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 600;
+  color: var(--fg);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+}
+.phead img {
+  width: 75px;
+  height: 75px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.pfoot {
+  background: rgba(225, 229, 236, 0.04);
+  padding: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 600;
+  color: var(--fg);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+}
+.mhead {
+  background: rgba(255, 255, 255, 0.04);
+  padding: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 600;
+  color: var(--fg);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+}
+.pbody,
+.mbody {
+  flex: 1;
+  overflow: auto;
+  padding: 6px;
+}
+
+
+/* ---------------- USER ITEMS ---------------- */
+.user-item{ display:flex; align-items:center; gap:10px; padding:8px; border-bottom:1px solid var(--panel-border); cursor:pointer; border-radius:8px; transition:0.12s; }
+.user-item:hover{ background:rgba(74,144,226,0.06); }
+.user-item img{ width:50px; height:50px; border-radius:50%; object-fit:cover; }
+.user-item .meta{ display:flex; flex-direction:column; }
+.user-item .name{ font-weight:600; color:var(--fg); }
+.user-item .last{ font-size:12px; color:var(--muted); }
+
+/* ---------------- MESSAGES ---------------- */
+.msg{ max-width:75%; margin:6px 10px; padding:8px 14px; border-radius:12px; word-wrap:break-word; transition:0.18s; }
+.in{ background:var(--msg-in); color:var(--fg); align-self:flex-start; }
+.out{ background:var(--msg-out); color:var(--fg); align-self:flex-end; }
+
+/* ---------------- CHAT INPUT ---------------- */
+.chat-input{ display:flex; gap:8px; padding:8px; background: rgba(255,255,255,0.02); border-top:1px solid rgba(255,255,255,0.02); border-radius:0 0 12px 12px; }
+.chat-input textarea{
+  flex:1;
+  resize:none;
+  padding:12px;
+  border-radius:10px;
+  border:2px solid rgba(29, 28, 28, 0.15);     
+  background:#ffffff;                       
+  color:inherit;
+  min-height:45px;
+  font:inherit;
+}
+.chat-input button{ background:var(--btn-fg); color:var(--btn-bg); border-radius:8px; padding:8px 16px; border:none; cursor:pointer; }
+.chat-input button:hover{ opacity:0.95; }
+
+
+/* ---------------- FOOTER ---------------- */
+footer{ height:70px; background:var(--panel-bg); color:var(--fg); display:flex; align-items:center; justify-content:center; gap:16px; flex-wrap:wrap; font-weight:600; box-shadow: var(--shadow); border-radius:12px 12px 0 0; backdrop-filter: blur(var(--panel-blur)); }
+footer div{ font-size:25px; }
+.app-footer {
+  height: auto;
+  padding: 14px 20px;
+  background: var(--panel-bg);
+  color: var(--fg);
+  border-radius: 12px 12px 0 0;
+  box-shadow: 0 -4px 12px rgba(0,0,0,0.08);
+  backdrop-filter: blur(var(--panel-blur));
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.footer-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.footer-row span {
+  padding: 6px 10px;
+  background: rgba(255,255,255,0.12);
+  border-radius: 8px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+  transition: 0.25s ease;
+}
+
+.footer-row span:hover {
+  background: rgba(255,255,255,0.22);
+  transform: translateY(-2px);
+}
+
+
+
+/* ---------------- SCROLLBARS ---------------- */
+.pbody::-webkit-scrollbar, .mbody::-webkit-scrollbar { width:8px; }
+.pbody::-webkit-scrollbar-thumb, .mbody::-webkit-scrollbar-thumb{ background:rgba(0,0,0,0.2); border-radius:4px; }
+.pbody::-webkit-scrollbar-track, .mbody::-webkit-scrollbar-track{ background:rgba(0,0,0,0.03); }
+
+/* ---------------- FOCUS / ACCESSIBILITY ---------------- */
+:focus{ outline: none; }
+button:focus, textarea:focus, input:focus, select:focus{ outline: 3px solid rgba(100,150,255,0.18); outline-offset:2px; }
+
+/* small responsive tweaks */
+@media (max-width:900px){ .container{ flex-direction:column; height:auto; } }
+
+/* modal base moved to CSS for clarity */
+#reg-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); align-items:center; justify-content:center; z-index:1200; }
+#reg-modal .card { background:var(--panel-bg); padding:16px; border-radius:10px; width:320px; color:var(--fg); box-shadow:var(--shadow); }
+#reg-modal .card input[type="text"], #reg-modal .card input[type="password"], #reg-modal .card input[type="file"]{ padding:8px; border-radius:6px; border:1px solid var(--panel-border); background:transparent; color:inherit; }
+.header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 25px;
+}
+
+.header-logo {
+  width: 95px;
+  height: 95px;
+  border-radius: 12px;
+  object-fit: cover;
+  background: rgba(255,255,255,0.15);
+  padding: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.20);
+}
+
+.header-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  width: 100%;
+}
+
+.header-title {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 700;
+  text-align: right;
+}
+
+.app-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+
+</style>
+</head>
+<body class="theme1">
+<header class="app">
+
+  <div class="header-row">
+
+    <!-- LEFT SIDE: Image -->
+    <img src="static/profile_pic/header.png" class="header-logo" alt="Header Logo">
+
+    <!-- RIGHT SIDE: Title + Actions -->
+    <div class="header-right">
+
+      <!-- Project title -->
+      <h1 class="header-title">
+        Cryptographically Secure Web Application for Confidential Messaging 
+      </h1>
+
+      <!-- Buttons + Theme Toggle -->
+      <div class="app-actions">
+        <button id="create-account-btn" type="button">Create Account</button>
+
+        <div class="theme-toggle" aria-hidden="false">
+          <label for="theme-select" style="font-weight:600;color:inherit">Theme</label>
+          <select id="theme-select" aria-label="Select theme">
+            <option value="theme1">Light (Blue)</option>
+            <option value="theme2">Light (Green)</option>
+            <option value="theme3">Dark (Recommended)</option>
+            <option value="theme4">Purple</option>
+          </select>
+
+          <button id="dark-toggle" type="button" aria-pressed="false">Toggle Dark</button>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+</header>
+
+
+
+<div class="container">
+  <!-- Left User Panel -->
+  <section class="panel" id="p1">
+    <div class="phead" id="p1-head"></div>
+    <div class="pbody" id="p1-body"></div>
+    <div class="pfoot" id="p1-foot"></div>
+  </section>
+
+  <!-- Middle Panel (Encrypted/Decrypted Monitor) -->
+  <section class="middle">
+    <div class="mhead" id="m-head">Encrypted / Decrypted Message Monitor</div>
+    <div class="mbody" id="m-body"></div>
+  </section>
+
+  <!-- Right User Panel -->
+  <section class="panel" id="p2">
+    <div class="phead" id="p2-head"></div>
+    <div class="pbody" id="p2-body"></div>
+    <div class="pfoot" id="p2-foot"></div>
+  </section>
+</div>
+
+<footer class="app-footer">
+  <div class="footer-row">
+    <span>Made by: Lalita Dev</span>
+    <span>University: IGNOU</span>
+    <span>Regional Center: RC-3 (DELHI)</span>
+    <span>Program: MSCIS</span>
+    <span>Enrollment No.: 2400171188</span>
+  </div>
+</footer>
+
+
+<!-- Register Modal -->
+<div id="reg-modal" role="dialog" aria-modal="true" aria-labelledby="reg-title">
+  <div class="card">
+
+    <!-- Header -->
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <b id="reg-title">Create Account</b>
+      <button onclick="hideReg()" type="button" aria-label="Close registration">✕</button>
+    </div>
+
+    <!-- Form -->
+    <form id="reg-form" enctype="multipart/form-data"
+          style="margin-top:10px;display:flex;flex-direction:column;gap:12px">
+
+      <!-- Profile Pic + Fields Layout -->
+      <div style="display:flex;gap:12px;align-items:center">
+
+       
+
+        <!-- Name + Mobile -->
+        <div style="flex:1;display:flex;flex-direction:column;gap:8px">
+          <input name="name" placeholder="Full Name" required aria-label="Full name">
+          <input name="mobile" placeholder="Mobile" required aria-label="Mobile number">
+        </div>
+
+      </div>
+
+      <!-- Password -->
+      <input name="password" type="password" placeholder="Password" required aria-label="Password">
+
+      <!-- File Input + Filename -->
+      <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+        <input id="reg-file" type="file" name="profile_pic" accept="image/*"
+               aria-label="Profile picture">
+        <span id="file-name" style="color:var(--muted);font-size:.85rem">No file chosen</span>
+      </label>
+
+      <!-- Submit -->
+      <button type="submit"
+              style="background:var(--hdr);color:var(--hdr-contrast);border:none;
+                     padding:10px;border-radius:6px;cursor:pointer">
+        Register
+      </button>
+
+    </form>
+  </div>
+</div>
+
+
+<script>
+const API = { REGISTER:'/register', LOGIN:'/login', USERS:'/fetch_users', SEND:'/send_message', MSG:'/fetch_messages', MON:'/monitor_messages' };
+const DEFAULT_PIC = 'static/profile_pic/default.png';
+let U1=null, U2=null, sel1=null, sel2=null;
+
+const el = id => document.getElementById(id);
+
+/* THEME HANDLING */
+function setTheme(themeName){
+  if(!themeName) themeName='theme1';
+  document.body.className = themeName;
+  try{ localStorage.setItem('app-theme', themeName); }catch(e){}
+  // update toggle state
+  const isDark = themeName === 'theme3';
+  const btn = el('dark-toggle');
+  if(btn){ btn.setAttribute('aria-pressed', String(isDark)); btn.textContent = isDark? 'Dark: ON' : 'Dark: OFF'; }
+  // update select
+  const sel = el('theme-select'); if(sel) sel.value = themeName;
+}
+
+// initialize theme from saved preference or system preference
+const savedTheme = (function(){ try{ return localStorage.getItem('app-theme'); }catch(e){return null;} })() || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'theme3' : 'theme1');
+setTheme(savedTheme);
+
+// UI bindings
+el('theme-select').addEventListener('change', e=> setTheme(e.target.value));
+el('dark-toggle').addEventListener('click', ()=>{
+  const current = document.body.className || 'theme1';
+  if(current === 'theme3'){
+    // go back to last non-dark theme stored or theme1
+    const last = (localStorage.getItem('last-light-theme')) || 'theme1';
+    setTheme(last);
+    localStorage.setItem('last-light-theme', last);
+  } else {
+    // store current as last light theme then switch to dark
+    try{ localStorage.setItem('last-light-theme', current);}catch(e){}
+    setTheme('theme3');
+  }
+});
+
+/* REG modal */
+function showReg(){ el('reg-modal').style.display='flex'; el('reg-modal').focus(); }
+function hideReg(){ el('reg-modal').style.display='none'; }
+
+
+el('create-account-btn').addEventListener('click', showReg);
+
+document.getElementById('reg-form').onsubmit = async e => {
+  e.preventDefault();
+  const fd=new FormData(e.target);
+  try{
+    const r=await fetch(API.REGISTER,{method:'POST',body:fd});
+    const d=await r.json();
+    alert(d.message||JSON.stringify(d));
+    if(d.status==='success'){ e.target.reset(); hideReg(); }
+  } catch(err){ console.error(err); alert('Register failed'); }
+};
+// Live profile image preview
+const regFile = document.getElementById('reg-file');
+const regPreview = document.getElementById('reg-preview');
+const fileNameLabel = document.getElementById('file-name');
+
+if (regFile && regPreview) {
+  regFile.addEventListener('change', e => {
+    const f = e.target.files?.[0];
+    if (!f) {
+      fileNameLabel.textContent = "No file chosen";
+      regPreview.src = "/mnt/data/6011ba39-c141-48e2-a70f-8431751aed25.png";
+      return;
+    }
+
+    fileNameLabel.textContent = f.name;
+
+    const reader = new FileReader();
+    reader.onload = ev => (regPreview.src = ev.target.result);
+    reader.readAsDataURL(f);
+  });
+}
+
+
+
+function isSidePanel(name){ return name==='p1' || name==='p2'; }
+function imgSrc(s){
+  if(!s || s === 'BROKEN') return DEFAULT_PIC;
+  return s;
+}
+
+
+/* LOGIN + LOGOUT */
+function renderLogin(panel){
+  if(!isSidePanel(panel)) return;
+  el(panel+'-head').innerHTML = '<b>Login</b>';
+  el(panel+'-body').innerHTML = `<div style="padding:10px;display:flex;flex-direction:column;gap:6px">
+    <input id="${panel}-mob" placeholder="Mobile" aria-label="mobile number">
+    <input id="${panel}-pass" type="password" placeholder="Password" aria-label="password">
+    <button type="button" onclick="doLogin('${panel}')">Login</button>
+  </div>`;
+  el(panel+'-foot').innerHTML = '';
+}
+
+function renderHeader(panel, user){
+  el(panel+'-head').innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px">
+      <img src="${imgSrc(user.profile_pic)}"
+           onerror="this.onerror=null; this.src='${DEFAULT_PIC}'"
+           alt="profile pic">
+      <span>${user.name}</span>
+    </div>
+    <button type="button" onclick="doLogout('${panel}')">Logout</button>
+  `;
+}
+
+
+function doLogout(panel) {
+  if (!isSidePanel(panel)) return;
+  if (panel === 'p1') { U1 = null; sel1=null; } else { U2 = null; sel2=null; }
+  renderLogin(panel);
+}
+
+async function doLogin(panel){
+  try{
+    const mobile = el(panel+'-mob').value, password = el(panel+'-pass').value;
+    const r = await fetch(API.LOGIN, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({mobile,password})});
+    const d = await r.json();
+    if(d.status!=='success'){ alert(d.message||'Login failed'); return; }
+    const id = d.id || d.user_id;
+    const user = { id:id, name:d.name, profile_pic:d.profile_pic||null };
+    if(panel==='p1'){ U1=user; } else { U2=user; }
+    renderHeader(panel,user);
+    await refreshUserList(panel);
+  } catch(err){ console.error('doLogin error', err); alert('Login error'); }
+}
+
+/* USER LIST */
+function renderUserList(panel, users){
+  const body = el(panel+'-body'); body.innerHTML='';
+  [...(users||[])].forEach(u => {
+    const d = document.createElement('div'); d.className='user-item';
+    d.innerHTML = `<img src="${imgSrc(u.profile_pic)}" onerror="this.src='${DEFAULT_PIC}'" alt="user pic">
+    <div class="meta"><span class="name">${u.name}</span><span class="last">${u.last_message||''}</span></div>`;
+    d.onclick = ()=> openChat(panel,u);
+    body.appendChild(d);
+  });
+  el(panel+'-foot').innerHTML = '';
+}
+
+async function refreshUserList(panel){
+  const me = panel==='p1'?U1:U2; if(!me) return;
+  if((panel==='p1'&&sel1)||(panel==='p2'&&sel2)) return; // don't overwrite open chat
+  try{
+    const res = await fetch(API.USERS,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({current_user_id:me.id})});
+    const d = await res.json();
+    if(d.status==='success') renderUserList(panel,d.users);
+  }catch(err){console.error('refreshUserList',err);} 
+}
+
+/* CHAT HEADER + BACK */
+function renderChatHeader(panel, me, other) {
+  el(panel+'-head').innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px">
+      <button id="${panel}-back-btn" type="button" style="margin-right:8px;padding:4px 6px;border-radius:6px;border:none;cursor:pointer">◀</button>
+      <img src="${imgSrc(other.profile_pic)}" onerror="this.src='${DEFAULT_PIC}'" style="width:36px;height:36px;border-radius:50%" alt="chat partner">
+      <div style="display:flex;flex-direction:column">
+        <div style="font-weight:bold">${other.name}</div>
+        <div style="font-size:12px;color:var(--muted)">Chat</div>
+      </div>
+    </div>`;
+  el(panel+'-back-btn').onclick = ()=> backFromChat(panel);
+}
+function backFromChat(panel){
+  if(panel==='p1') sel1=null; else sel2=null;
+  const me = panel==='p1'?U1:U2;
+  if(me) renderHeader(panel,me); else renderLogin(panel);
+  refreshUserList(panel);
+}
+
+/* CHAT */
+function openChat(panel,user){
+  if(panel==='p1') sel1=user; else sel2=user;
+  const me = panel==='p1'?U1:U2; if(!me){alert('Login first');return;}
+  renderChat(panel, me, user);
+}
+
+function renderChat(panel, me, other){
+  renderChatHeader(panel, me, other);
+  el(panel+'-body').innerHTML = `<div id="${panel}-chat" style="display:flex;flex-direction:column;padding:8px"></div>`;
+  el(panel+'-foot').innerHTML = `<div class="chat-input"><textarea id="${panel}-txt" rows="2" aria-label="message"></textarea>
+    <button type="button" onclick="sendMsg('${panel}')">Send</button></div>`;
+  loadConversation(panel,me.id,other.id);
+}
+
+async function loadConversation(panel, senderId, receiverId) {
+  try {
+    const r = await fetch(API.MSG, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sender_id: senderId, receiver_id: receiverId })
+    });
+    const d = await r.json();
+    if (d.status !== 'success') return;
+
+    const box = el(panel + '-chat');
+    if (!box) return;
+
+    // Count how many messages already rendered
+    const already = box.querySelectorAll('.msg').length;
+
+    // Get only the new messages
+    const newMsgs = d.messages.slice(already);
+
+    newMsgs.forEach(m => {
+      const dv = document.createElement('div');
+      dv.className = 'msg ' + (m.sender_id === senderId ? 'out' : 'in');
+      dv.textContent = m.decrypted;
+      box.appendChild(dv);
+    });
+
+    // Scroll only if new messages arrived
+    if (newMsgs.length) {
+      box.scrollTop = box.scrollHeight;
+    }
+  } catch (err) {
+    console.error('loadConversation', err);
+  }
+}
+
+
+async function sendMsg(panel){
+  const me=panel==='p1'?U1:U2, other=panel==='p1'?sel1:sel2;
+  const ta=el(panel+'-txt'); const txt=ta.value.trim();
+  if(!me||!other||!txt) return;
+  try{
+    const r=await fetch(API.SEND,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sender_id:me.id,receiver_id:other.id,message:txt})});
+    const d=await r.json(); if(d.status!=='success') return;
+    ta.value=''; await loadConversation(panel,me.id,other.id);
+  }catch(err){console.error('sendMsg',err);} 
+}
+
+/* MONITOR */
+async function refreshMonitor(){
+  try{
+    const r=await fetch(API.MON); const d=await r.json();
+    if(d.status!=='success') return;
+    const mb=el('m-body'); mb.innerHTML='';
+    d.messages.forEach(m=>{
+      const div=document.createElement('div'); div.style.margin='8px 0'; div.style.padding='8px'; div.style.borderBottom='1px solid rgba(0,0,0,0.06)';
+      div.innerHTML=`<b>${m.sender_name} → ${m.receiver_name}</b><br>
+      Encrypted: <small style="word-break:break-all">${m.encrypted}</small><br>
+      Decrypted: ${m.decrypted}`;
+      mb.appendChild(div);
+    });
+  }catch(err){console.error('refreshMonitor',err);} 
+}
+/* ---------- OPTIMIZED INIT (single adaptive loop) ---------- */
+renderLogin('p1'); renderLogin('p2');
+refreshMonitor(); // immediate load
+
+// polling intervals (ms) — tweak if needed
+const MONITOR_INTERVAL = 2000;
+const CONV_FAST = 800;
+const CONV_SLOW = 2000;
+const USERS_INTERVAL = 2000;
+
+// last-run trackers (start from now so we don't double-run immediately)
+let lastMonitor = Date.now();
+let lastConv = Date.now();
+let lastUsers = Date.now();
+
+// main loop runs frequently but actual tasks only run when their timers elapse
+const MAIN_TICK = 500; // base tick (ms)
+const mainLoop = setInterval(async () => {
+  const now = Date.now();
+
+  // 1) Monitor (always): every MONITOR_INTERVAL
+  if (now - lastMonitor >= MONITOR_INTERVAL) {
+    try { await refreshMonitor(); } catch (e) { console.error('monitor', e); }
+    lastMonitor = now;
+  }
+
+  // 2) Conversations: adaptive interval (fast when any chat open)
+  const convInterval = (sel1 || sel2) ? CONV_FAST : CONV_SLOW;
+  if (now - lastConv >= convInterval) {
+    try {
+      if (U1 && sel1) await loadConversation('p1', U1.id, sel1.id);
+      if (U2 && sel2) await loadConversation('p2', U2.id, sel2.id);
+    } catch (e) { console.error('convo', e); }
+    lastConv = now;
+  }
+
+  // 3) User list refresh: every USERS_INTERVAL (only for logged panels)
+  if (now - lastUsers >= USERS_INTERVAL) {
+    try {
+      if (U1) await refreshUserList('p1');
+      if (U2) await refreshUserList('p2');
+    } catch (e) { console.error('users', e); }
+    lastUsers = now;
+  }
+}, MAIN_TICK);
+
+// clean up on unload
+window.addEventListener('beforeunload', () => clearInterval(mainLoop));
+
+</script>
+</body>
+</html>
